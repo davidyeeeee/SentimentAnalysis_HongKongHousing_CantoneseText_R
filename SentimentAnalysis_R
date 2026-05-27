@@ -1,0 +1,178 @@
+# ==============================================================================
+# General Sentiment Analysis Script (R Language)
+# Supports any OpenAI Chat Completion compatible API (official, third-party, local)
+# Configure via environment variables – no code changes required
+# ==============================================================================
+
+# --- 1. Load required packages ---
+if (!require("httr")) install.packages("httr")
+if (!require("jsonlite")) install.packages("jsonlite")
+if (!require("readr")) install.packages("readr")
+if (!require("stringr")) install.packages("stringr")
+
+library(httr)
+library(jsonlite)
+library(readr)
+library(stringr)
+
+# --- 2. Read configuration from environment variables (with defaults) ---
+# Required: API key
+api_key <- Sys.getenv("OPENAI_API_KEY")
+if (api_key == "") {
+  stop("Please set environment variable OPENAI_API_KEY, e.g.: Sys.setenv(OPENAI_API_KEY='your-key')")
+}
+
+# Optional: API base URL (defaults to official OpenAI)
+api_base <- Sys.getenv("OPENAI_API_BASE", 
+                       unset = "https://api.openai.com/v1")
+# Ensure trailing slash is removed and append /chat/completions
+if (!grepl("/chat/completions$", api_base)) {
+  api_base <- gsub("/$", "", api_base)
+  api_url <- paste0(api_base, "/chat/completions")
+} else {
+  api_url <- api_base
+}
+
+# Optional: Model name (default gpt-3.5-turbo, can be changed to gpt-4o-mini etc.)
+model_name <- Sys.getenv("OPENAI_MODEL", unset = "gpt-3.5-turbo")
+
+# Optional: Temperature (0~1, set to 0 for deterministic results)
+temperature <- as.numeric(Sys.getenv("OPENAI_TEMPERATURE", unset = "0"))
+
+# Optional: Max output tokens
+max_tokens <- as.numeric(Sys.getenv("OPENAI_MAX_TOKENS", unset = "10"))
+
+# Optional: Delay between requests (seconds) to avoid rate limiting
+request_delay <- as.numeric(Sys.getenv("REQUEST_DELAY", unset = "0.3"))
+
+# --- Path configuration (can be overridden by environment variables) ---
+data_dir <- Sys.getenv("DATA_DIR", unset = "./data")
+input_file <- Sys.getenv("INPUT_FILE", unset = file.path(data_dir, "threads.csv"))
+output_file <- Sys.getenv("OUTPUT_FILE", unset = file.path(data_dir, "sentiment_output.csv"))
+
+# Column name in CSV that contains the text to analyze (default "title")
+text_column <- Sys.getenv("TEXT_COLUMN", unset = "title")
+
+# Create data directory if it doesn't exist
+if (!dir.exists(data_dir)) dir.create(data_dir, recursive = TRUE)
+
+# --- 3. System prompt (can be modified or loaded from environment) ---
+system_prompt <- Sys.getenv(
+  "SYSTEM_PROMPT",
+  unset = "You are a sociologist familiar with Hong Kong culture and LIHKG slang. Analyze the sentiment of the following text. -1.0 = extremely negative or housing anxiety, 0.0 = neutral, 1.0 = extremely positive/optimistic about the property market. Watch for Cantonese irony. Output only a number. / 你是一个精通香港社会文化和连登用语的学者。请分析以下文本的情感。-1.0代表极度负面或焦虑，0.0代表中立，1.0代表极度正面或乐观。注意识别粤语反讽。只输出一个数字。"
+)#using two languages: English is for understanding, and Chinese is better in terms of analysing Cantonese texts
+
+# --- 4. Define core sentiment analysis function (generic) ---
+analyze_sentiment <- function(text, 
+                              api_url = api_url,
+                              api_key = api_key,
+                              model = model_name,
+                              temp = temperature,
+                              max_tok = max_tokens,
+                              system_msg = system_prompt) {
+  
+  # Empty or invalid input returns 0.0
+  if (is.na(text) || nchar(trimws(text)) == 0) {
+    return(0.0)
+  }
+  
+  # Build request body
+  body <- list(
+    model = model,
+    messages = list(
+      list(role = "system", content = system_msg),
+      list(role = "user", content = paste0("文本内容：", text))
+    ),
+    temperature = temp,
+    max_tokens = max_tok
+  )
+  
+  tryCatch({
+    # Send POST request
+    res <- POST(
+      url = api_url,
+      add_headers(Authorization = paste("Bearer", api_key)),
+      content_type_json(),
+      body = toJSON(body, auto_unbox = TRUE)
+    )
+    
+    # Check HTTP status
+    if (http_error(res)) {
+      warning(paste("API request failed, status code:", status_code(res)))
+      return(0.0)
+    }
+    
+    # Parse response
+    result_content <- content(res, as = "parsed", encoding = "UTF-8")
+    result_text <- result_content$choices[[1]]$message$content
+    
+    # Extract number (supports negative and decimal)
+    score_match <- str_extract(result_text, "-?\\d+\\.?\\d*")
+    
+    if (!is.na(score_match)) {
+      score <- as.numeric(score_match)
+      # Clamp to [-1, 1] range
+      return(max(-1.0, min(1.0, score)))
+    } else {
+      warning(paste("Could not extract number from response:", result_text))
+      return(0.0)
+    }
+    
+  }, error = function(e) {
+    message(paste("\n[!] Request error:", e$message))
+    return(0.0)
+  })
+}
+
+# --- 5. Main program ---
+cat("=== Sentiment Analysis Script Started ===\n")
+cat("API Endpoint:", api_url, "\n")
+cat("Model:", model_name, "\n")
+cat("Input file:", input_file, "\n")
+cat("Output file:", output_file, "\n")
+cat("Text column:", text_column, "\n\n")
+
+# Check if input file exists
+if (!file.exists(input_file)) {
+  stop(paste("❌ Input file not found:", input_file))
+}
+
+# Load data
+cat("📥 Loading data...\n")
+df <- read_csv(input_file, show_col_types = FALSE)
+
+# Check if required column exists
+if (!(text_column %in% names(df))) {
+  stop(paste("❌ Column not found in dataset:", text_column))
+}
+
+total <- nrow(df)
+cat(paste("🚀 Analyzing", total, "texts...\n\n"))
+
+# Store sentiment scores
+scores <- numeric(total)
+
+# Loop through each row
+for (i in 1:total) {
+  text_content <- df[[text_column]][i]
+  score <- analyze_sentiment(text_content)
+  scores[i] <- score
+  
+  # Display progress
+  cat(sprintf("\rProgress: [%d/%d] | Current score: %0.2f | Preview: %s...", 
+              i, total, score, str_trunc(as.character(text_content), 20)))
+  
+  # Delay to avoid API rate limits
+  Sys.sleep(request_delay)
+}
+
+cat("\n\n📊 Analysis complete, saving results...\n")
+
+# Add scores to original data frame
+df$sentiment_score <- scores
+
+# Save results (with BOM for Excel compatibility)
+write_excel_csv(df, output_file)
+
+cat(paste("✅ Done! Results saved to:\n", output_file, "\n"))
+cat("\n=== Script Finished ===\n")
