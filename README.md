@@ -103,6 +103,16 @@ Notes
 
 - If you process large batches, consider using a local model (via Ollama or LocalAI) to reduce costs.
 
+AI Use Declaration
+
+This project was developed with the assistance of an AI language model (OpenAI's GPT-4o / ChatGPT). The AI was used for the following purposes:
+
+- Generating initial code snippets and function structures
+- Debugging and suggesting improvements
+- Drafting the project README and configuration instructions
+
+All AI-generated code and text have been reviewed, tested, and modified as necessary by the human author to ensure correctness, safety, and compliance with the project's academic goals. The final work remains the original intellectual contribution of the author, with the AI acting as a coding assistant and writing aid.
+
 License
 
 MIT
