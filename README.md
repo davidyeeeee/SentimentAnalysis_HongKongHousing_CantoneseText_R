@@ -16,6 +16,8 @@ Traditional R sentiment analysis packages (e.g., syuzhet, sentimentr, tidytext +
 
 In short, GPT provides context-aware, multi-lingual, and irony-sensitive sentiment analysis that closely matches human judgment – essential for credible computational social science research on Cantonese forums.
 
+---
+
 Features
 
 - Batch sentiment scoring of text data (CSV input/output)
@@ -41,6 +43,8 @@ Installation
    install.packages(c("httr", "jsonlite", "readr", "stringr"))
 
 3. Set up your API key and other configurations (see below).
+
+---
 
 Configuration
 
@@ -77,6 +81,8 @@ Example (using a third-party proxy like "Shubiaobiao"):
    Sys.setenv(OPENAI_API_BASE = "https://api.shubiaobiao.com/v1")
    Sys.setenv(OPENAI_MODEL = "gpt-4o-mini")
 
+---
+
 Usage
 
 1. Place your input CSV file (with a text column, e.g., "title") inside the data/ folder (or adjust INPUT_FILE accordingly).
@@ -95,6 +101,8 @@ title                                            sentiment_score
 政府撤辣好消息                                     0.72
 乜嘢係納米樓？                                     0.05
 
+---
+
 Notes
 
 - The system prompt is written in Chinese to better capture Cantonese expressions and irony. You can override it with SYSTEM_PROMPT if you prefer English.
@@ -102,6 +110,8 @@ Notes
 - The script adds a 0.3-second delay between API calls to avoid rate limiting. Adjust REQUEST_DELAY as needed.
 
 - If you process large batches, consider using a local model (via Ollama or LocalAI) to reduce costs.
+
+---
 
 AI Use Declaration
 
