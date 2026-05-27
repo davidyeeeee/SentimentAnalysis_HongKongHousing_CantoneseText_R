@@ -56,7 +56,7 @@ OPENAI_API_KEY; Your API key (required); (none)
 
 OPENAI_API_BASE; API endpoint URL; https://api.openai.com/v1
 
-OPENAI_MODEL; Model name; gpt-3.5-turbo
+OPENAI_MODEL; Model name; gpt-4o-mini
 
 OPENAI_TEMPERATURE; Sampling temperature (0-1); 0
 
